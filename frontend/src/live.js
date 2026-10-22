@@ -1,8 +1,27 @@
 // The link to a running dimOS blueprint, through Desktop's gateways (the same plumbing as dim-controller):
-// odom places one office robot, its navigation goals go out on goal_pose, keys drive it on cmd_vel, color_image is its camera.
+// its odom places one office robot, navigation goals go to its goal input, keys drive its cmd_vel, its camera shows in the panel.
 import { DimApp } from 'https://esm.sh/gh/jeff-hykin/dim-app@v0.22.3/source/dim_app.js';
 
-const TOPICS = { odom: 'odom', goal: 'goal_pose', drive: 'cmd_vel', camera: 'color_image' };
+const DEFAULT_TOPICS = { odom: 'odom', goal: 'goal_request', drive: 'cmd_vel', camera: 'color_image' };
+
+// The run's topics by message type and direction, from its blueprint's streams; a name a blueprint lacks keeps the default.
+async function topicsOf(blueprint) {
+  const topics = { ...DEFAULT_TOPICS };
+  try {
+    const res = await fetch(`../../dimos-gateway/catalog/blueprints/${encodeURIComponent(blueprint)}`);
+    if (!res.ok) return topics;
+    const streams = (await res.json()).modules?.flatMap(m => m.streams ?? []) ?? [];
+    const find = (type, direction, prefer) => {
+      const all = streams.filter(s => s.type?.endsWith(`.${type}`) && s.direction === direction).map(s => s.topic.replace(/^\//, ''));
+      return prefer.map(re => all.find(t => re.test(t))).find(Boolean) ?? all[0];
+    };
+    topics.odom = find('PoseStamped', 'out', [/^odom$/, /odom/]) ?? topics.odom;
+    topics.goal = find('PoseStamped', 'in', [/^goal_request$/, /^goal_pose$/, /goal/]) ?? topics.goal;
+    topics.drive = find('Twist', 'in', [/^cmd_vel$/, /tele_cmd_vel/, /cmd_vel/]) ?? topics.drive;
+    topics.camera = find('Image', 'out', [/^color_image$/, /color/, /image/]) ?? topics.camera;
+  } catch { /* no catalog: the defaults */ }
+  return topics;
+}
 
 export const kindOf = blueprint => /g1/i.test(blueprint) ? 'g1' : /r1|galaxea/i.test(blueprint) ? 'r1' : /x2|agibot/i.test(blueprint) ? 'x2' : 'go2';
 
@@ -11,8 +30,8 @@ export async function findRun() {
   try {
     const res = await fetch('../../dimos-gateway/runs');
     if (!res.ok) return null;
-    const { runs } = await res.json();
-    return runs?.at(-1) ?? null;
+    const run = (await res.json()).runs?.at(-1);
+    return run ? { ...run, topics: await topicsOf(run.blueprint) } : null;
   } catch { return null; }
 }
 
@@ -28,14 +47,14 @@ export class Live {
     this.anchor = null; // the first odom pose: where the robot stood when the dock was assigned
     this.pose = null; this.frameId = 'odom'; this.lastAt = 0;
     this.app = new DimApp({ msgDecodeEndpoint: '../../dimos-gateway/msgs.js', connectOptions: { heartbeatHz: 5, heartbeatMisses: 3 } });
-    this.app.subscribe(TOPICS.odom, ({ header, pose }) => {
+    this.app.subscribe(run.topics.odom, ({ header, pose }) => {
       const p = { x: pose.position.x, y: pose.position.y, th: yawOf(pose.orientation) };
       this.anchor ??= p; this.frameId = header?.frame_id || this.frameId; this.lastAt = performance.now();
       this.pose = compose(this.dock, compose(invert(this.anchor), p));
     }, { type: 'geometry_msgs.PoseStamped', delivery: 'latest', maxHz: 30 });
     // Publishers open now but stay silent until a command; the cmd_vel deadman is armed by the first drive input.
-    this.goalPub = this.app.publisher(TOPICS.goal, 'geometry_msgs.PoseStamped', { delivery: 'latest' });
-    this.drivePub = this.app.publisher(TOPICS.drive, 'geometry_msgs.Twist', { delivery: 'latest' })
+    this.goalPub = this.app.publisher(run.topics.goal, 'geometry_msgs.PoseStamped', { delivery: 'latest' });
+    this.drivePub = this.app.publisher(run.topics.drive, 'geometry_msgs.Twist', { delivery: 'latest' })
       .then(async pub => { await pub.setDeadman({ linear: { x: 0 }, angular: { z: 0 } }); return pub; });
     this.driving = false;
   }
@@ -64,7 +83,7 @@ export class Live {
   async stopDriving() { if (this.driving) { this.driving = false; (await this.drivePub).stop(); } }
   // Plays the robot's camera into a <video>; returns the unsubscribe.
   camera(video) {
-    return this.app.zenoh.subscribe(`dimos/${TOPICS.camera}/sensor_msgs.Image`, { delivery: 'latest', maxHz: 30, encoding: 'dimos_lcm_image' }, ({ mediaStream }) => {
+    return this.app.zenoh.subscribe(`dimos/${this.run.topics.camera}/sensor_msgs.Image`, { delivery: 'latest', maxHz: 30, encoding: 'dimos_lcm_image' }, ({ mediaStream }) => {
       if (mediaStream && video.srcObject !== mediaStream) { video.srcObject = mediaStream; video.play().catch(() => {}); }
     });
   }

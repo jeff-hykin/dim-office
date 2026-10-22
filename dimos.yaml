@@ -5,18 +5,20 @@ uses:
     "@dimos-gateway":
         # the running blueprint, whose robot joins the office as LIVE
         - GET /runs
+        # its streams: which topics are its odom, goal input, cmd_vel and camera
+        - GET /catalog/blueprints/{name}
         - GET /msgs.js
     "@zenoh-gateway": ">=0.5 <0.6"
-# what the page does on zenoh: the live robot's odom and camera in; its nav goals and key driving out
+# what the page does on zenoh (topic names come from the blueprint): the live robot's odom and camera in; its nav goals and key driving out
 zenoh:
     default_permission: deny
     read:
         - id: odom-and-camera
           messages: [declare_subscriber, put]
-          key_exprs: ["dimos/odom/geometry_msgs.PoseStamped", "dimos/color_image/sensor_msgs.Image"]
+          key_exprs: ["dimos/**/geometry_msgs.PoseStamped", "dimos/**/sensor_msgs.Image"]
           permission: allow
     write:
         - id: goals-and-drive
           messages: [put]
-          key_exprs: ["dimos/goal_pose/geometry_msgs.PoseStamped", "dimos/cmd_vel/geometry_msgs.Twist"]
+          key_exprs: ["dimos/**/geometry_msgs.PoseStamped", "dimos/**/geometry_msgs.Twist"]
           permission: allow

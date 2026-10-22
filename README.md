@@ -11,8 +11,8 @@ dimos-desktop install https://github.com/jeff-hykin/dim-office
 With a blueprint running, its robot joins the office as `LIVE-<KIND>` (Go2, G1, R1 or X2 by the blueprint's name),
 through the same gateways as [dim-controller](https://github.com/jeff-hykin/dim-controller):
 
-- `odom` places it, relative to where it stood when the page opened (the office is not a map of the real room)
-- floor clicks and navigation skills send `goal_pose`; a cancel or E-STOP sends a goal at its current pose
+- its `odom` places it, relative to where it stood when the page opened (the office is not a map of the real room)
+- floor clicks and navigation skills send a goal on its goal input (`goal_request` on a Go2); a cancel or E-STOP sends a goal at its current pose
 - W/A/S/D or the arrow keys drive it on `cmd_vel` while held, with the gateway's deadman armed
 - `color_image` is its camera in the side panel
 
