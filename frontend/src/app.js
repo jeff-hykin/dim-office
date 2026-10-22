@@ -1301,7 +1301,7 @@ function updatePanel() {
     $('#v-batt').textContent = `${r.battery.toFixed(0)}% · ${(44 + r.battery * .07).toFixed(1)} V`; $('#v-batt-m').style.width = `${r.battery}%`;
     $('#v-link').textContent = `WebRTC ${(26 + Math.random() * 14).toFixed(0)} ms`;
   }
-  $('#v-pose').textContent = `${r.pos.x.toFixed(1)}, ${(-r.pos.z).toFixed(1)}, ${Math.round(T.MathUtils.radToDeg(Math.atan2(Math.sin(r.yaw), Math.cos(r.yaw)))) || 0}°`;
+  $('#v-pose').textContent = `${(r.pos.x - (r.live?.run.simulation ? SIM_ROOM.x : 0)).toFixed(1)}, ${(-r.pos.z).toFixed(1)}, ${Math.round(T.MathUtils.radToDeg(Math.atan2(Math.sin(r.yaw), Math.cos(r.yaw)))) || 0}°`;
   $('#v-loc').textContent = r.live ? r.live.run.blueprint : `${(.955 + Math.random() * .035).toFixed(3)} · office-v0.5`;
   r.cfg.sensors.forEach(([, , hz], i) => { const el = document.getElementById(`hz-${i}`); if (el) el.textContent = `${(hz * (.985 + Math.random() * .03)).toFixed(hz > 50 ? 0 : 1)} Hz`; });
   for (const n of r.panelJoints) {
