@@ -35,15 +35,16 @@ async function topicsOf(blueprint) {
 
 export const kindOf = blueprint => /g1/i.test(blueprint) ? 'g1' : /r1|galaxea/i.test(blueprint) ? 'r1' : /x2|agibot/i.test(blueprint) ? 'x2' : 'go2';
 
-// The newest running blueprint, or null with no dimos (or no run).
+// The running blueprint, or null with no dimos (or nothing running).
 export async function findRun() {
   try {
-    const res = await fetch('../../dimos-gateway/runs');
+    const res = await fetch('../../dimos-gateway/active');
     if (!res.ok) return null;
-    const { runs, launch } = await res.json(), run = runs?.at(-1);
-    if (!run) return null;
-    const simulation = launch?.blueprint === run.blueprint ? launch.overrides?.simulation || null : null;
-    return { ...run, simulation, topics: await topicsOf(run.blueprint) };
+    const { running, runId, blueprint, startedAt, launch } = await res.json();
+    if (!running || !blueprint) return null;
+    // the gateway's last launch, when it is this run: the config it ran with
+    const simulation = launch?.runId === runId && launch?.blueprint === blueprint ? launch.config?.global?.simulation || null : null;
+    return { runId, blueprint, startedAt, simulation, topics: await topicsOf(blueprint) };
   } catch { return null; }
 }
 
