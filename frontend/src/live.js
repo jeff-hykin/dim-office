@@ -1,8 +1,17 @@
 // The link to a running dimOS blueprint, through Desktop's gateways (the same plumbing as dim-controller):
-// its odom places one office robot, navigation goals go to its goal input, keys drive its cmd_vel, its camera shows in the panel.
+// its odom places one office robot, navigation goals go to its goal input, keys drive its velocity input (tele_cmd_vel on a Go2), its camera shows in the panel.
 import { DimApp } from 'https://esm.sh/gh/jeff-hykin/dim-app@v0.22.3/source/dim_app.js';
 
 const DEFAULT_TOPICS = { odom: 'odom', goal: 'goal_request', drive: 'cmd_vel', camera: 'color_image' };
+
+const isVelocity = s => /cmd_vel/.test(s.name) && /\.Twist$/.test(s.type ?? '');
+function driveTopic(modules) {
+  const takers = modules.filter(m => m.streams?.some(s => s.direction === 'in' && isVelocity(s)));
+  const muxOut = new Set(takers.flatMap(m => m.streams.filter(s => s.direction === 'out' && isVelocity(s)).map(s => s.topic)));
+  const rank = t => /(^|\/)tele_/.test(t) ? 0 : /(^|\/)cmd_vel$/.test(t) ? 1 : /(^|\/)nav_/.test(t) ? 3 : 2;
+  const inputs = takers.flatMap(m => m.streams.filter(s => s.direction === 'in' && isVelocity(s) && !muxOut.has(s.topic)).map(s => s.topic));
+  return inputs.sort((a, b) => rank(a) - rank(b))[0]?.replace(/^\//, '');
+}
 
 // The run's topics by message type and direction, from its blueprint's streams; a name a blueprint lacks keeps the default.
 async function topicsOf(blueprint) {
@@ -10,14 +19,15 @@ async function topicsOf(blueprint) {
   try {
     const res = await fetch(`../../dimos-gateway/catalog/blueprints/${encodeURIComponent(blueprint)}`);
     if (!res.ok) return topics;
-    const streams = (await res.json()).modules?.flatMap(m => m.streams ?? []) ?? [];
+    const modules = (await res.json()).modules ?? [], streams = modules.flatMap(m => m.streams ?? []);
     const find = (type, direction, prefer) => {
       const all = streams.filter(s => s.type?.endsWith(`.${type}`) && s.direction === direction).map(s => s.topic.replace(/^\//, ''));
       return prefer.map(re => all.find(t => re.test(t))).find(Boolean) ?? all[0];
     };
     topics.odom = find('PoseStamped', 'out', [/^odom$/, /odom/]) ?? topics.odom;
     topics.goal = find('PoseStamped', 'in', [/^goal_request$/, /^goal_pose$/, /goal/]) ?? topics.goal;
-    topics.drive = find('Twist', 'in', [/^cmd_vel$/, /tele_cmd_vel/, /cmd_vel/]) ?? topics.drive;
+    // dim-controller's rule: a velocity input another velocity-taking module outputs is a mux's output (skip it), then tele_* first
+    topics.drive = driveTopic(modules) ?? topics.drive;
     topics.camera = find('Image', 'out', [/^color_image$/, /color/, /image/]) ?? topics.camera;
   } catch { /* no catalog: the defaults */ }
   return topics;
