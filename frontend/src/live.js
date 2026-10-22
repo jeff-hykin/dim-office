@@ -1,6 +1,6 @@
 // The link to a running dimOS blueprint, through Desktop's gateways (the same plumbing as dim-controller):
 // its odom places one office robot, navigation goals go to its goal input, keys drive its velocity input (tele_cmd_vel on a Go2), its camera shows in the panel.
-import { DimApp } from 'https://esm.sh/gh/jeff-hykin/dim-app@v0.22.3/source/dim_app.js';
+import { DimApp } from 'https://esm.sh/gh/jeff-hykin/dim-app@v0.23.1/source/dim_app.js';
 
 const DEFAULT_TOPICS = { odom: 'odom', goal: 'goal_request', drive: 'cmd_vel', camera: 'color_image' };
 
@@ -17,7 +17,7 @@ function driveTopic(modules) {
 async function topicsOf(blueprint) {
   const topics = { ...DEFAULT_TOPICS };
   try {
-    const res = await fetch(`../../dimos-gateway/catalog/blueprints/${encodeURIComponent(blueprint)}`);
+    const res = await fetch(`../../gateways/dimos/catalog/blueprints/${encodeURIComponent(blueprint)}`);
     if (!res.ok) return topics;
     const modules = (await res.json()).modules ?? [], streams = modules.flatMap(m => m.streams ?? []);
     const find = (type, direction, prefer) => {
@@ -38,7 +38,7 @@ export const kindOf = blueprint => /g1/i.test(blueprint) ? 'g1' : /r1|galaxea/i.
 // The running blueprint, or null with no dimos (or nothing running).
 export async function findRun() {
   try {
-    const res = await fetch('../../dimos-gateway/active');
+    const res = await fetch('../../gateways/dimos/active');
     if (!res.ok) return null;
     const { running, runId, blueprint, startedAt, launch } = await res.json();
     if (!running || !blueprint) return null;
@@ -61,7 +61,7 @@ export class Live {
     this.dock = { x: dock.x, y: -dock.z, th: dock.yaw };
     this.anchor = absolute ? { x: 0, y: 0, th: 0 } : null;
     this.pose = null; this.frameId = 'odom'; this.lastAt = 0;
-    this.app = new DimApp({ msgDecodeEndpoint: '../../dimos-gateway/msgs.js', connectOptions: { heartbeatHz: 5, heartbeatMisses: 3 } });
+    this.app = new DimApp({ msgDecodeEndpoint: '../../gateways/dimos/msgs.js', connectOptions: { heartbeatHz: 5, heartbeatMisses: 3 } });
     this.app.subscribe(run.topics.odom, ({ header, pose }) => {
       const p = { x: pose.position.x, y: pose.position.y, th: yawOf(pose.orientation) };
       this.anchor ??= p; this.frameId = header?.frame_id || this.frameId; this.lastAt = performance.now();
