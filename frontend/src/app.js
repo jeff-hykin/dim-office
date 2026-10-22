@@ -3,6 +3,7 @@
 import * as T from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { buildOffice, ZONES } from './office.js';
 import { buildFridge } from './fridge.js';
 import { buildPrinter } from './printer.js';
@@ -82,6 +83,11 @@ const office = buildOffice(); Object.values(office.layers).forEach(l => scene.ad
 const fridge = buildFridge(scene, { x: 6.48, z: 12.85, rotY: -Math.PI / 2 });
 // The printer sits on the north end of the inner desk row, facing the aisle by the red divider.
 const printer = buildPrinter(scene, { x: -1.25, y: .75, z: 6.47 });
+// The MuJoCo sim's default room (office_555, ground floor, walls cut down; tools/export_sim_office.py), east of the office.
+// Its origin is the sim's world origin, so a sim robot's odom places it exactly.
+const SIM_ROOM = { x: 33, bounds: { minX: 11.4, maxX: 41.9, minZ: -14.7, maxZ: 15.6 } };
+new GLTFLoader().load('sim/office_555.glb', g => { g.scene.position.x = SIM_ROOM.x; g.scene.traverse(o => { if (o.isMesh) o.receiveShadow = true; }); scene.add(g.scene); });
+const inSimRoom = p => p.x > SIM_ROOM.bounds.minX && p.x < SIM_ROOM.bounds.maxX && p.z > SIM_ROOM.bounds.minZ && p.z < SIM_ROOM.bounds.maxZ;
 
 // Isometric camera: orthographic, fixed elevation, limited swing so the cut-down walls never block.
 const VIEW_H = 15, ELEV = T.MathUtils.degToRad(38), AZ0 = T.MathUtils.degToRad(-135);
@@ -376,6 +382,8 @@ function step(label, skill, iconKey, run) { const s = { label, skill, icon: icon
 
 function navStep(robot, target, name, iconKey = 'nav') {
   return step(`Go to ${name}`, `navigate_to("${name}")`, iconKey, async s => {
+    // a live robot's own planner finds the way: it gets the goal itself
+    if (robot.live) { await robot.follow([V(target.x, 0, target.z)]); if (!s.cancelled && target.yaw !== undefined) await turnTo(robot, target.yaw); return; }
     const plan = planPath(costmap, robot.pos, target);
     if (!plan) throw new Error('no free path in the costmap');
     log(robot, `planner: A* expanded ${plan.expanded} cells, ${plan.points.length} waypoints, ${plan.length.toFixed(1)} m`);
@@ -1204,7 +1212,7 @@ const ray = new T.Raycaster(), ndc = new T.Vector2(), floorPlane = new T.Plane(V
 function pick(e) {
   const r = renderer.domElement.getBoundingClientRect();
   ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(ndc, camera);
-  const p = V(), floor = ray.ray.intersectPlane(floorPlane, p) && Math.abs(p.x) < 7 && Math.abs(p.z) < 18.2 ? p : null;
+  const p = V(), floor = ray.ray.intersectPlane(floorPlane, p) && ((Math.abs(p.x) < 7 && Math.abs(p.z) < 18.2) || (selected?.live && inSimRoom(p))) ? p : null;
   if (draw) return floor ? { floor } : null;
   const hit = ray.intersectObjects([...robots.map(b => b.hit), ...fridge.hitMeshes, ...printer.hitMeshes, ...chairMeshes], false)[0];
   if (hit) return hit.object.userData.robot ? { robot: hit.object.userData.robot } : hit.object.userData.chairRef ? { object: 'chair', ref: hit.object.userData.chairRef } : { object: hit.object.userData.interactive };
@@ -1319,7 +1327,7 @@ function portrait(robot) {
 
 // The live robot: an office robot that mirrors the running blueprint instead of simulating.
 function linkLive(r, run) {
-  r.live = new Live(run, r.home);
+  r.live = run.simulation ? new Live(run, { x: SIM_ROOM.x, z: 0, yaw: 0 }, true) : new Live(run, r.home);
   r.cfg = { ...r.cfg, manip: false, why: 'the live robot only navigates from here', sensors: [['Camera', 'color_image', 30], ['Odometry', 'odom', 30]] };
   let last = null, lastAt = 0;
   r.follow = function (points) {
@@ -1366,7 +1374,7 @@ addEventListener('blur', () => held.clear());
   const run = await findRun();
   if (run) {
     const kind = kindOf(run.blueprint), dock = snapToFree(costmap, .3, 3.0) ?? { x: .3, z: 3.0 };
-    FLEET.unshift({ id: `LIVE-${kind.toUpperCase()}`, kind, x: dock.x, z: dock.z, yaw: -Math.PI / 2, run });
+    FLEET.unshift({ id: `LIVE-${kind.toUpperCase()}`, kind, ...(run.simulation ? { x: SIM_ROOM.x, z: 0 } : dock), yaw: -Math.PI / 2, run });
     $('.site .chip').textContent = 'LIVE'; $('.site .chip').title = `${run.blueprint} is running: LIVE-${kind.toUpperCase()} mirrors it, the rest are simulated`;
   }
   const kinds = [...new Set(FLEET.map(f => f.kind))];
@@ -1387,6 +1395,7 @@ addEventListener('blur', () => held.clear());
     setAI(fn, caps) { ai = fn; aiCaps = caps; setMode(!!fn); }, get chain() { return chain; }, get learned() { return learned; }, get draw() { return draw; },
   };
   select(robots[0]);
+  if (robots[0].live?.run.simulation) { aim(V(SIM_ROOM.x, 0, 0)); follow = true; $('#focus').setAttribute('aria-pressed', 'true'); }
   log(null, `${robots.length} robots online · map office-v0.5 · costmap ${costmap.W}×${costmap.H} at 10 cm`);
   log(robots[0], robots[0].live ? `linked to ${robots[0].live.run.blueprint} · click the floor to send it, WASD to drive` : 'ready · two 7-DOF arms, parallel grippers');
   requestAnimationFrame(frame);

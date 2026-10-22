@@ -40,8 +40,10 @@ export async function findRun() {
   try {
     const res = await fetch('../../dimos-gateway/runs');
     if (!res.ok) return null;
-    const run = (await res.json()).runs?.at(-1);
-    return run ? { ...run, topics: await topicsOf(run.blueprint) } : null;
+    const { runs, launch } = await res.json(), run = runs?.at(-1);
+    if (!run) return null;
+    const simulation = launch?.blueprint === run.blueprint ? launch.overrides?.simulation || null : null;
+    return { ...run, simulation, topics: await topicsOf(run.blueprint) };
   } catch { return null; }
 }
 
@@ -51,10 +53,12 @@ const invert = a => ({ x: -Math.cos(a.th) * a.x - Math.sin(a.th) * a.y, y: Math.
 const yawOf = ({ x, y, z, w }) => Math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z));
 
 export class Live {
-  constructor(run, dock) {
+  // dock: where odom's anchor sits in the office. absolute: odom's origin is the dock (a sim whose room is in the office);
+  // otherwise the first odom pose is (the real room isn't), so the robot starts at the dock.
+  constructor(run, dock, absolute = false) {
     this.run = run;
     this.dock = { x: dock.x, y: -dock.z, th: dock.yaw };
-    this.anchor = null; // the first odom pose: where the robot stood when the dock was assigned
+    this.anchor = absolute ? { x: 0, y: 0, th: 0 } : null;
     this.pose = null; this.frameId = 'odom'; this.lastAt = 0;
     this.app = new DimApp({ msgDecodeEndpoint: '../../dimos-gateway/msgs.js', connectOptions: { heartbeatHz: 5, heartbeatMisses: 3 } });
     this.app.subscribe(run.topics.odom, ({ header, pose }) => {
