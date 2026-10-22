@@ -4,6 +4,12 @@ An isometric office where robots are selected like Sims and tasked through pie m
 line. A [dimOS Desktop](https://github.com/dimensionalOS/dimos-desktop) app, ported from the "Dimensional Desktop"
 concept artifact.
 
+![Office in Desktop: the LIVE Go2 from a running replay selected, its camera in the side panel](docs/desktop.jpg)
+
+On its own, at `http://localhost:5555/apps/dim-office/`:
+
+![Office on its own page](docs/standalone.jpg)
+
 ```sh
 dimos-desktop install https://github.com/jeff-hykin/dim-office
 ```
