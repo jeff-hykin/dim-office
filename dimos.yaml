@@ -1,6 +1,6 @@
 # the app's contract with Desktop: https://github.com/jeff-hykin/dimos-desktop-mirror/blob/main/docs/create-apps/index.md
 title: Office
-version: "0.3.0"
+version: "0.3.1"
 spec-version: v1.4
 uses:
     "@dimos-gateway":
