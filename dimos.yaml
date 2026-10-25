@@ -1,7 +1,7 @@
 # the app's contract with Desktop: https://github.com/jeff-hykin/dimos-desktop-mirror/blob/main/docs/create-apps/index.md
 title: Office
-version: "0.3.1"
-spec-version: v1.4
+version: "0.4.0"
+spec-version: v1.5
 uses:
     "@dimos-gateway":
         # the running blueprint, whose robot joins the office as LIVE
@@ -11,6 +11,7 @@ uses:
         - GET /msgs.js
     "@desktop-gateway":
         # dim-app's zenoh client: where the zenoh-gateway and this app's namespace are
+        # (no `env:`, spec v1.5's: a static app has no server, so it reads none of DIMOS_APP)
         - GET /management/gateways/zenoh
     "@zenoh-gateway": ">=0.5 <0.6"
 # what the page does on zenoh (topic names come from the blueprint): the live robot's odom and camera in; its nav goals and key driving out

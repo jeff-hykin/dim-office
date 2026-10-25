@@ -1,6 +1,6 @@
 // The link to a running dimOS blueprint, through Desktop's gateways (the same plumbing as dim-controller):
 // its odom places one office robot, navigation goals go to its goal input, keys drive its velocity input (tele_cmd_vel on a Go2), its camera shows in the panel.
-import { DimApp } from 'https://cdn.jsdelivr.net/gh/jeff-hykin/dim-app@v0.25.1/source/dim_app.js';
+import { DimApp } from 'https://cdn.jsdelivr.net/gh/jeff-hykin/dim-app@v0.26.0/source/dim_app.js';
 
 const DEFAULT_TOPICS = { odom: 'odom', goal: 'goal_request', drive: 'cmd_vel', camera: 'color_image' };
 
